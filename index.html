@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProcedencIA · Trazabilidad del uso de IA en un manuscrito</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
+<style>
+:root{
+  --bg:#E9EEF2; --surface:#FFFFFF; --ink:#17233A; --muted:#5B6A80; --line:#C9D3DD;
+  --seal:#2E6B5E; --seal-soft:#DCEBE6; --ai:#B7791F; --ai-soft:#F6EAD4; --new:#A33B3B; --new-soft:#F4DEDE;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121A26; --surface:#1B2533; --ink:#E4EAF2; --muted:#98A6B8; --line:#2E3B4D;
+    --seal:#6FBFA9; --seal-soft:#1E3530; --ai:#E0A94A; --ai-soft:#3A2F1A; --new:#E07D7D; --new-soft:#3D2222;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5}
+a{color:var(--seal)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--seal);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px;display:grid;grid-template-columns:300px 1fr;gap:32px}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+header.top{grid-column:1/-1;border-bottom:2px solid var(--ink);padding-bottom:18px}
+header.top h1{font-family:var(--serif);font-weight:600;font-size:clamp(2rem,4vw,3rem);line-height:1.05;margin:0}
+header.top p{margin:.5rem 0 0;max-width:68ch;color:var(--muted)}
+aside{align-self:start;position:sticky;top:16px}
+@media (max-width:900px){aside{position:static}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:16px}
+.panel h2{font-size:1rem;margin:0 0 .6rem}
+label{display:block;font-size:.85rem;color:var(--muted);margin:.6rem 0 .2rem}
+input[type=text],input[type=password],select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:.5rem .6rem}
+textarea{min-height:120px;resize:vertical;font-family:var(--serif);font-size:1rem;line-height:1.6}
+.btn{display:inline-block;border:1px solid var(--ink);background:var(--ink);color:var(--surface);border-radius:4px;padding:.5rem .9rem;cursor:pointer;font-weight:600}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.small{padding:.3rem .6rem;font-size:.85rem}
+.btn:disabled{opacity:.5;cursor:wait}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:.7rem}
+main section{margin-bottom:44px}
+main h2{font-family:var(--serif);font-weight:600;font-size:1.7rem;margin:0 0 .3rem}
+main h2 + p{margin:0 0 1rem;color:var(--muted);max-width:70ch}
+/* The memorable element: the hash chain */
+.chain{list-style:none;margin:0;padding:0;position:relative}
+.chain::before{content:"";position:absolute;left:21px;top:8px;bottom:8px;width:2px;background:repeating-linear-gradient(var(--line) 0 6px,transparent 6px 10px)}
+.link{position:relative;padding:0 0 22px 60px}
+.seal{position:absolute;left:0;top:0;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.8rem;border:2px solid var(--seal);background:var(--seal-soft);color:var(--seal)}
+.link[data-type="post-ia"] .seal{border-color:var(--ai);background:var(--ai-soft);color:var(--ai)}
+.link[data-type="final"] .seal{background:var(--seal);color:var(--surface)}
+.link .card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.link h3{margin:0;font-size:1.05rem}
+.meta{font-size:.85rem;color:var(--muted)}
+.hash{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem;word-break:break-all;color:var(--muted)}
+.empty{border:1px dashed var(--line);border-radius:6px;padding:20px;color:var(--muted)}
+.diff{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px 18px;font-family:var(--serif);font-size:1.02rem;line-height:1.7;max-height:520px;overflow:auto;white-space:pre-wrap}
+.diff ins{background:var(--seal-soft);color:var(--seal);text-decoration:none}
+.diff del{background:var(--new-soft);color:var(--new)}
+.stats{display:flex;gap:24px;flex-wrap:wrap;margin:12px 0}
+.stats div{min-width:110px}
+.stats b{display:block;font-family:var(--serif);font-size:1.6rem;font-weight:600}
+.stats span{font-size:.85rem;color:var(--muted)}
+.finding{border-left:4px solid var(--line);padding:6px 12px;margin:10px 0;background:var(--surface)}
+.finding.alta{border-color:var(--new)} .finding.media{border-color:var(--ai)} .finding.baja{border-color:var(--seal)}
+.finding q{font-family:var(--serif);font-style:italic}
+table{width:100%;border-collapse:collapse;font-size:.92rem;background:var(--surface)}
+th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+.scroll{overflow-x:auto}
+.verdict{display:inline-block;padding:.15rem .5rem;border-radius:3px;font-weight:600;font-size:.85rem}
+.v-ok{background:var(--seal-soft);color:var(--seal)} .v-warn{background:var(--ai-soft);color:var(--ai)} .v-bad{background:var(--new-soft);color:var(--new)}
+.note{font-size:.85rem;color:var(--muted)}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:.6rem 1rem;border-radius:4px;display:none;z-index:10;max-width:90vw}
+footer{grid-column:1/-1;border-top:1px solid var(--line);padding-top:16px;font-size:.85rem;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.link.fresh .seal{animation:stamp .5s ease-out}}
+@keyframes stamp{0%{transform:scale(1.6);opacity:0}100%{transform:scale(1);opacity:1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <h1>ProcedencIA</h1>
+  <p>Registra cómo evoluciona tu manuscrito, antes y después de usar IA, en una cadena de puntos de control sellados. Al final obtienes el dossier de procedencia que piden congresos como NeurIPS: qué escribiste tú, qué cambió la IA y qué verificaste después.</p>
+</header>
+
+<aside>
+  <div class="panel">
+    <h2>Manuscrito</h2>
+    <label for="title">Título</label>
+    <input type="text" id="title" placeholder="Título del paper">
+    <label for="venue">Congreso o revista</label>
+    <input type="text" id="venue" placeholder="p. ej., NeurIPS 2026 Position Paper Track">
+    <label for="policy">Política de uso de IA aplicable</label>
+    <textarea id="policy" style="min-height:90px;font-family:var(--sans);font-size:.9rem"></textarea>
+  </div>
+  <div class="panel">
+    <h2>Conexión con OpenAI</h2>
+    <label for="key">Clave de API</label>
+    <input type="password" id="key" placeholder="sk-...">
+    <label for="model">Modelo</label>
+    <select id="model"></select>
+    <div class="row"><button class="btn small ghost" id="loadModels">Cargar modelos de mi cuenta</button></div>
+    <p class="note">La clave se guarda solo en este navegador. La IA solo se usa para analizar diferencias entre versiones, nunca para escribir tu texto.</p>
+  </div>
+  <div class="panel">
+    <h2>Proyecto</h2>
+    <div class="row">
+      <button class="btn small ghost" id="exportJson">Exportar proyecto</button>
+      <label class="btn small ghost" style="margin:0">Importar<input type="file" id="importJson" accept=".json" hidden></label>
+      <button class="btn small ghost" id="reset">Empezar de cero</button>
+    </div>
+  </div>
+</aside>
+
+<main>
+  <section id="checkpoints">
+    <h2>Puntos de control</h2>
+    <p>Cada versión queda fechada automáticamente y sellada con una huella SHA-256 encadenada a la anterior. Si alguien altera una versión o su fecha, la cadena deja de verificarse.</p>
+    <ol class="chain" id="chain"></ol>
+    <div class="panel">
+      <h2>Añadir punto de control</h2>
+      <label for="cpType">Tipo</label>
+      <select id="cpType">
+        <option value="borrador">Borrador humano</option>
+        <option value="pre-ia">Pre-IA: contenido sustantivo desarrollado sin IA</option>
+        <option value="post-ia">Post-IA: justo después de las ediciones de la IA</option>
+        <option value="humana">Revisión humana posterior</option>
+        <option value="final">Versión final enviada</option>
+      </select>
+      <label for="cpNote">Qué ha pasado en esta versión</label>
+      <input type="text" id="cpNote" placeholder="p. ej., corrección de estilo con IA en secciones 2 y 3">
+      <label for="cpText">Texto completo</label>
+      <textarea id="cpText" placeholder="Pega aquí el texto o sube un archivo"></textarea>
+      <div class="row">
+        <label class="btn small ghost" style="margin:0">Subir PDF, DOCX, TXT, MD o TEX<input type="file" id="cpFile" accept=".pdf,.docx,.txt,.md,.tex" hidden></label>
+        <label class="btn small ghost" style="margin:0">Importar desde AutorIA<input type="file" id="cpAutoria" accept=".json" hidden></label>
+        <button class="btn" id="addCp">Sellar punto de control</button>
+      </div>
+    </div>
+    <div class="row"><button class="btn ghost" id="verify">Verificar la cadena</button><span id="verifyOut" class="note"></span></div>
+  </section>
+
+  <section id="ailog">
+    <h2>Registro de uso de IA</h2>
+    <p>Anota cada intervención de la IA en el momento en que ocurre. Este registro alimenta la declaración de uso y el dossier.</p>
+    <div class="panel">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0 12px">
+        <div><label for="lgTool">Herramienta</label><input type="text" id="lgTool" placeholder="ChatGPT, Claude, DeepL…"></div>
+        <div><label for="lgModel">Modelo o versión</label><input type="text" id="lgModel" placeholder="si lo sabes"></div>
+        <div><label for="lgPurpose">Finalidad</label>
+          <select id="lgPurpose">
+            <option>Corrección ortográfica y gramatical</option>
+            <option>Edición ligera de estilo</option>
+            <option>Edición intensa o reestructuración</option>
+            <option>Traducción</option>
+            <option>Búsqueda o síntesis bibliográfica</option>
+            <option>Código, figuras o análisis</option>
+            <option>Generación de texto nuevo</option>
+          </select></div>
+        <div><label for="lgSections">Secciones afectadas</label><input type="text" id="lgSections" placeholder="Introducción, §3…"></div>
+      </div>
+      <label for="lgPrompt">Instrucción que le diste (resumen)</label>
+      <input type="text" id="lgPrompt" placeholder="p. ej., corrige gramática sin cambiar el contenido">
+      <div class="row"><button class="btn" id="addLog">Añadir al registro</button></div>
+    </div>
+    <div class="scroll"><table id="logTable"></table></div>
+  </section>
+
+  <section id="compare">
+    <h2>Comparar versiones</h2>
+    <p>Elige dos puntos de control. El análisis con IA busca contenido sustantivo nuevo (afirmaciones, argumentos, datos, referencias) en la segunda versión, e ignora los cambios de redacción que conservan el sentido.</p>
+    <div class="row">
+      <select id="cmpA" style="max-width:320px"></select>
+      <span>frente a</span>
+      <select id="cmpB" style="max-width:320px"></select>
+    </div>
+    <div class="row">
+      <button class="btn ghost" id="doDiff">Ver diferencias</button>
+      <button class="btn" id="doAnalysis">Analizar contenido nuevo con IA</button>
+    </div>
+    <div id="diffOut"></div>
+    <div id="anOut"></div>
+  </section>
+
+  <section id="dossier">
+    <h2>Dossier de procedencia</h2>
+    <p>Reúne cadena, registro, comparaciones guardadas y un borrador de declaración de uso de IA. Revísalo antes de enviarlo: el dossier solo es tan honesto como los puntos de control que registres.</p>
+    <div class="row">
+      <button class="btn" id="dlMd">Descargar en Markdown</button>
+      <button class="btn ghost" id="dlHtml">Descargar para imprimir en PDF</button>
+    </div>
+    <label for="decl">Borrador de declaración de uso de IA</label>
+    <textarea id="decl" style="font-family:var(--sans);font-size:.95rem"></textarea>
+  </section>
+</main>
+
+<footer>
+  ProcedencIA · Fernando Borrás Rocher, Universidad Miguel Hernández de Elche. Herramienta de documentación, no de ocultación: no modifica tu texto, no permite fechar versiones a mano y no sustituye al historial de versiones de tu editor (Overleaf, Google Docs, Git), que conviene conservar y enlazar en el dossier.
+</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',3200)};
+const words=t=>(t.trim().match(/\S+/g)||[]).length;
+const TYPES={'borrador':'Borrador humano','pre-ia':'Pre-IA','post-ia':'Post-IA','humana':'Revisión humana','final':'Versión final'};
+const SEAL={'borrador':'B','pre-ia':'1','post-ia':'2','humana':'H','final':'3'};
+const DEFAULT_POLICY='NeurIPS 2026 Position Paper Track: el artículo debe estar redactado sustancialmente por los autores; la IA solo puede usarse para corrección o cambios periféricos del texto principal. Si se requiere, el dossier debe identificar (1) un punto previo a la IA, (2) un punto justo después de las ediciones de la IA y (3) la versión final, mostrando que la IA no introdujo contenido sustantivo nuevo y que los autores verificaron el resultado.';
+if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+/* ---------- persistence (IndexedDB) ---------- */
+const DB={db:null,
+  open(){return new Promise((res,rej)=>{const r=indexedDB.open('procedencia',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>rej(r.error)})},
+  get(k){return new Promise(res=>{try{const r=this.db.transaction('kv').objectStore('kv').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>res(null)}catch(e){res(null)}})},
+  set(k,v){return new Promise(res=>{try{const tx=this.db.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=()=>res(true);tx.onerror=()=>res(false)}catch(e){res(false)}})}
+};
+let S={title:'',venue:'',policy:DEFAULT_POLICY,checkpoints:[],ailog:[],analyses:[],decl:''};
+const save=()=>DB.set('state',S);
+
+/* ---------- hashing ---------- */
+async function sha256(str){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+const payload=(cp,prev)=>[prev,cp.createdAt,cp.type,cp.note,cp.text].join('\u241E');
+
+/* ---------- file reading ---------- */
+async function readFile(f){
+  const ext=f.name.split('.').pop().toLowerCase();
+  if(ext==='pdf'){
+    const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;let out=[];
+    for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i);const c=await p.getTextContent();out.push(c.items.map(it=>it.str+(it.hasEOL?'\n':' ')).join(''))}
+    return out.join('\n\n');
+  }
+  if(ext==='docx'){const r=await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()});return r.value}
+  return await f.text();
+}
+
+/* ---------- OpenAI ---------- */
+const FALLBACK_MODELS=['gpt-4o-mini','gpt-4.1-mini','gpt-4o','gpt-5.6-luna','gpt-5.6-terra','gpt-5.6-sol'];
+function fillModels(list){const sel=$('#model');const cur=localStorage.getItem('ia_openai_model')||'gpt-4o-mini';sel.innerHTML=list.map(m=>`<option ${m===cur?'selected':''}>${esc(m)}</option>`).join('');if(!list.includes(cur))sel.selectedIndex=0}
+async function loadModels(){
+  const key=$('#key').value.trim();if(!key){toast('Escribe primero tu clave de API');return}
+  try{const r=await fetch('https://api.openai.com/v1/models',{headers:{Authorization:'Bearer '+key}});if(!r.ok)throw new Error('La API respondió '+r.status);
+    const d=await r.json();const list=d.data.map(m=>m.id).filter(id=>/^(gpt-4o|gpt-4\.1|gpt-5|o\d)/.test(id)&&!/(audio|realtime|tts|transcribe|image|search|embedding)/.test(id)).sort();
+    fillModels(list.length?list:FALLBACK_MODELS);toast(list.length+' modelos disponibles en tu cuenta')}
+  catch(e){toast('No se pudieron cargar los modelos: '+e.message)}
+}
+async function callLLM(system,user){
+  const key=$('#key').value.trim();if(!key)throw new Error('Falta la clave de API de OpenAI');
+  const model=$('#model').value;const body={model,messages:[{role:'system',content:system},{role:'user',content:user}],response_format:{type:'json_object'}};
+  if(/^(gpt-5|o\d)/.test(model))body.max_completion_tokens=8000;else{body.max_tokens=4000;body.temperature=0.1}
+  const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},body:JSON.stringify(body)});
+  if(!r.ok){const t=await r.text();throw new Error('La API respondió '+r.status+': '+t.slice(0,200))}
+  const d=await r.json();const txt=d.choices[0].message.content.replace(/```json|```/g,'').trim();return JSON.parse(txt);
+}
+
+/* ---------- rendering ---------- */
+function renderChain(freshId){
+  const el=$('#chain');
+  if(!S.checkpoints.length){el.innerHTML='<li class="empty">Todavía no hay puntos de control. Empieza sellando tu primer borrador escrito sin IA.</li>';}
+  else el.innerHTML=S.checkpoints.map((c,i)=>`<li class="link ${c.id===freshId?'fresh':''}" data-type="${c.type}">
+    <div class="seal" title="${esc(TYPES[c.type])}">${SEAL[c.type]}</div>
+    <div class="card"><h3>${esc(TYPES[c.type])}${c.note?': '+esc(c.note):''}</h3>
+    <div class="meta">${new Date(c.createdAt).toLocaleString('es-ES')} · ${c.words.toLocaleString('es-ES')} palabras${c.source?' · '+esc(c.source):''}</div>
+    <div class="hash">${c.hash}</div></div></li>`).join('');
+  const opts=S.checkpoints.map((c,i)=>`<option value="${i}">${i+1}. ${esc(TYPES[c.type])} · ${new Date(c.createdAt).toLocaleDateString('es-ES')}</option>`).join('');
+  $('#cmpA').innerHTML=opts;$('#cmpB').innerHTML=opts;
+  if(S.checkpoints.length>1){const pre=S.checkpoints.findIndex(c=>c.type==='pre-ia');const post=S.checkpoints.findIndex(c=>c.type==='post-ia');
+    $('#cmpA').value=pre>=0?pre:S.checkpoints.length-2;$('#cmpB').value=post>pre&&post>=0?post:S.checkpoints.length-1}
+}
+function renderLog(){
+  const t=$('#logTable');
+  if(!S.ailog.length){t.innerHTML='<tr><td class="note">Sin entradas. Si no usaste IA en la redacción, el dossier lo hará constar.</td></tr>';return}
+  t.innerHTML='<tr><th>Fecha</th><th>Herramienta</th><th>Finalidad</th><th>Secciones</th><th>Instrucción</th><th></th></tr>'+
+    S.ailog.map((l,i)=>`<tr><td>${new Date(l.date).toLocaleDateString('es-ES')}</td><td>${esc(l.tool)}${l.model?' ('+esc(l.model)+')':''}</td><td>${esc(l.purpose)}</td><td>${esc(l.sections)}</td><td>${esc(l.prompt)}</td><td><button class="btn small ghost" data-del="${i}">Quitar</button></td></tr>`).join('');
+}
+function draftDecl(){
+  if(!S.ailog.length)return 'Los autores declaran que no se han utilizado herramientas de IA generativa en la redacción de este manuscrito.';
+  const g={};S.ailog.forEach(l=>{(g[l.purpose]=g[l.purpose]||[]).push(l)});
+  let s='Los autores declaran el siguiente uso de herramientas de IA generativa en la preparación del manuscrito. ';
+  s+=Object.entries(g).map(([p,ls])=>`${p}: ${[...new Set(ls.map(l=>l.tool+(l.model?' ('+l.model+')':'')))].join(', ')}, en ${[...new Set(ls.map(l=>l.sections).filter(Boolean))].join('; ')||'secciones no especificadas'}.`).join(' ');
+  s+=' El contenido sustantivo (tesis, argumentos, datos y referencias) fue desarrollado por los autores, que revisaron y verificaron todo el texto final y asumen plena responsabilidad sobre él. Se conserva un registro de versiones con puntos de control previos y posteriores al uso de IA.';
+  return s;
+}
+function renderAll(){$('#title').value=S.title;$('#venue').value=S.venue;$('#policy').value=S.policy;renderChain();renderLog();$('#decl').value=S.decl||draftDecl();renderSavedAnalyses()}
+
+/* ---------- checkpoints ---------- */
+async function addCheckpoint(type,note,text,source){
+  if(words(text)<20){toast('El texto es demasiado corto para sellarlo');return}
+  const prev=S.checkpoints.length?S.checkpoints[S.checkpoints.length-1].hash:'GENESIS';
+  const cp={id:crypto.randomUUID(),type,note,text,words:words(text),createdAt:new Date().toISOString(),prevHash:prev,source:source||''};
+  cp.hash=await sha256(payload(cp,prev));S.checkpoints.push(cp);await save();renderChain(cp.id);
+  $('#cpText').value='';$('#cpNote').value='';toast('Punto de control sellado');
+}
+$('#addCp').onclick=()=>addCheckpoint($('#cpType').value,$('#cpNote').value.trim(),$('#cpText').value,'');
+$('#cpFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;toast('Leyendo '+f.name+'…');try{$('#cpText').value=await readFile(f);if(!$('#cpNote').value)$('#cpNote').value=f.name;toast('Texto cargado: '+words($('#cpText').value)+' palabras')}catch(err){toast('No se pudo leer el archivo: '+err.message)}e.target.value=''};
+$('#cpAutoria').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(d.app!=='AutorIA'||!d.text)throw new Error('no es una exportación de AutorIA');
+  const L=d.log||{};const note=`Reescritura humana con AutorIA: ${L.paragraphs||0} párrafos, ${L.typed||0} caracteres tecleados, ${L.pasted||0} pegados, ${Math.round((L.seconds||0)/60)} min`;
+  await addCheckpoint('humana',note,d.text,'AutorIA')}catch(err){toast('Importación fallida: '+err.message)}e.target.value=''};
+$('#verify').onclick=async()=>{let prev='GENESIS',ok=true,bad=-1;
+  for(let i=0;i<S.checkpoints.length;i++){const c=S.checkpoints[i];const h=await sha256(payload(c,prev));if(c.prevHash!==prev||h!==c.hash){ok=false;bad=i;break}prev=c.hash}
+  $('#verifyOut').innerHTML=ok?`<span class="verdict v-ok">Cadena íntegra</span> ${S.checkpoints.length} puntos de control verificados`:`<span class="verdict v-bad">Cadena rota</span> en el punto ${bad+1}: una versión o su fecha se modificó después de sellarse`};
+
+/* ---------- AI log ---------- */
+$('#addLog').onclick=async()=>{const l={date:new Date().toISOString(),tool:$('#lgTool').value.trim(),model:$('#lgModel').value.trim(),purpose:$('#lgPurpose').value,sections:$('#lgSections').value.trim(),prompt:$('#lgPrompt').value.trim()};
+  if(!l.tool){toast('Indica la herramienta');return}S.ailog.push(l);S.decl='';await save();renderLog();$('#decl').value=draftDecl();['#lgTool','#lgModel','#lgSections','#lgPrompt'].forEach(s=>$(s).value='')};
+$('#logTable').onclick=async e=>{const i=e.target.dataset.del;if(i===undefined)return;S.ailog.splice(+i,1);await save();renderLog();$('#decl').value=draftDecl()};
+
+/* ---------- compare ---------- */
+function pick(){const a=S.checkpoints[+$('#cmpA').value],b=S.checkpoints[+$('#cmpB').value];if(!a||!b||a===b){toast('Elige dos puntos de control distintos');return null}return[a,b]}
+$('#doDiff').onclick=()=>{const p=pick();if(!p)return;const[a,b]=p;
+  const parts=Diff.diffWords(a.text,b.text);let add=0,del=0,same=0;
+  const html=parts.map(x=>{const n=words(x.value);if(x.added){add+=n;return`<ins>${esc(x.value)}</ins>`}if(x.removed){del+=n;return`<del>${esc(x.value)}</del>`}same+=n;return esc(x.value)}).join('');
+  const kept=a.words?Math.round(100*same/a.words):0;
+  $('#diffOut').innerHTML=`<div class="stats"><div><b>${add.toLocaleString('es-ES')}</b><span>palabras añadidas</span></div><div><b>${del.toLocaleString('es-ES')}</b><span>palabras eliminadas</span></div><div><b>${kept}%</b><span>del texto de partida se conserva literal</span></div></div><div class="diff">${html}</div>`};
+$('#doAnalysis').onclick=async()=>{const p=pick();if(!p)return;const[a,b]=p;const btn=$('#doAnalysis');btn.disabled=true;btn.textContent='Analizando…';
+  const sys=`Eres un auditor de procedencia de manuscritos académicos. Recibes dos versiones del mismo texto, A (anterior) y B (posterior). Tu tarea es identificar CONTENIDO SUSTANTIVO presente en B que no esté en A: afirmaciones o tesis nuevas, argumentos o pasos de razonamiento nuevos, datos, cifras, ejemplos, referencias o citas nuevas, y cambios de postura o de alcance de una afirmación. NO cuentes como sustantivos los cambios de redacción, orden, gramática, concisión o traducción que conservan el sentido. No reescribas ni propongas texto. Responde solo con JSON: {"veredicto":"sin_contenido_nuevo"|"contenido_nuevo_menor"|"contenido_nuevo_sustantivo","resumen":"2-4 frases","hallazgos":[{"fragmento_B":"cita literal breve de B, máx. 30 palabras","tipo":"afirmación|argumento|dato|referencia|ejemplo|cambio de postura","explicacion":"por qué no está en A","gravedad":"baja|media|alta"}],"eliminado":"resumen breve de contenido sustantivo de A que desaparece en B, o cadena vacía"}. Escribe en el idioma del manuscrito si es español; si no, en español.`;
+  const cut=t=>t.length>90000?t.slice(0,90000)+'\n[…texto truncado…]':t;
+  try{const r=await callLLM(sys,`VERSIÓN A (${TYPES[a.type]}):\n"""${cut(a.text)}"""\n\nVERSIÓN B (${TYPES[b.type]}):\n"""${cut(b.text)}"""`);
+    const an={date:new Date().toISOString(),model:$('#model').value,a:a.id,b:b.id,aLabel:TYPES[a.type],bLabel:TYPES[b.type],aHash:a.hash,bHash:b.hash,r};
+    S.analyses.push(an);await save();renderSavedAnalyses();toast('Análisis guardado en el dossier')}
+  catch(e){toast(e.message)}finally{btn.disabled=false;btn.textContent='Analizar contenido nuevo con IA'}};
+const VCLS={sin_contenido_nuevo:['v-ok','Sin contenido nuevo'],contenido_nuevo_menor:['v-warn','Contenido nuevo menor'],contenido_nuevo_sustantivo:['v-bad','Contenido nuevo sustantivo']};
+function renderSavedAnalyses(){
+  if(!S.analyses.length){$('#anOut').innerHTML='';return}
+  $('#anOut').innerHTML='<h3 style="margin-top:24px">Análisis guardados</h3>'+S.analyses.slice().reverse().map((an,ri)=>{const i=S.analyses.length-1-ri;const v=VCLS[an.r.veredicto]||['v-warn',an.r.veredicto];
+    return `<div class="panel"><div class="row" style="margin:0 0 .4rem;justify-content:space-between"><strong>${esc(an.aLabel)} → ${esc(an.bLabel)}</strong><span class="verdict ${v[0]}">${v[1]}</span></div>
+    <div class="meta">${new Date(an.date).toLocaleString('es-ES')} · ${esc(an.model)}</div><p>${esc(an.r.resumen)}</p>
+    ${(an.r.hallazgos||[]).map(h=>`<div class="finding ${esc(h.gravedad)}"><q>${esc(h.fragmento_B)}</q><div class="meta">${esc(h.tipo)} · gravedad ${esc(h.gravedad)}</div><div>${esc(h.explicacion)}</div></div>`).join('')}
+    ${an.r.eliminado?`<p class="note">Eliminado respecto a A: ${esc(an.r.eliminado)}</p>`:''}
+    <button class="btn small ghost" data-rman="${i}">Quitar del dossier</button></div>`}).join('');
+}
+$('#anOut').onclick=async e=>{const i=e.target.dataset.rman;if(i===undefined)return;S.analyses.splice(+i,1);await save();renderSavedAnalyses()};
+
+/* ---------- dossier ---------- */
+async function chainStatus(){let prev='GENESIS';for(const c of S.checkpoints){if(c.prevHash!==prev||await sha256(payload(c,prev))!==c.hash)return false;prev=c.hash}return true}
+async function buildMd(){
+  const ok=await chainStatus();const d=new Date().toLocaleString('es-ES');
+  let m=`# Dossier de procedencia\n\n**Manuscrito:** ${S.title||'(sin título)'}  \n**Destino:** ${S.venue||'(sin especificar)'}  \n**Generado:** ${d} con ProcedencIA\n\n## Política aplicable\n\n${S.policy}\n\n`;
+  m+=`## Cadena de puntos de control\n\nEstado de la cadena: **${ok?'íntegra':'ROTA'}** (${S.checkpoints.length} puntos, SHA-256 encadenado).\n\n| # | Tipo | Fecha | Palabras | Nota | Huella |\n|---|---|---|---|---|---|\n`;
+  S.checkpoints.forEach((c,i)=>m+=`| ${i+1} | ${TYPES[c.type]} | ${new Date(c.createdAt).toLocaleString('es-ES')} | ${c.words} | ${(c.note||'').replace(/\|/g,'/')} | \`${c.hash.slice(0,16)}…\` |\n`);
+  m+=`\n## Registro de uso de IA\n\n`;
+  m+=S.ailog.length?'| Fecha | Herramienta | Finalidad | Secciones | Instrucción |\n|---|---|---|---|---|\n'+S.ailog.map(l=>`| ${new Date(l.date).toLocaleDateString('es-ES')} | ${l.tool}${l.model?' ('+l.model+')':''} | ${l.purpose} | ${l.sections} | ${(l.prompt||'').replace(/\|/g,'/')} |`).join('\n')+'\n':'No se registró uso de IA.\n';
+  m+=`\n## Análisis de contenido nuevo entre versiones\n\n`;
+  if(!S.analyses.length)m+='No se han guardado análisis.\n';
+  S.analyses.forEach(an=>{m+=`### ${an.aLabel} → ${an.bLabel}\n\nVeredicto: **${(VCLS[an.r.veredicto]||[0,an.r.veredicto])[1]}** · ${an.model} · ${new Date(an.date).toLocaleString('es-ES')}  \nHuellas: \`${an.aHash.slice(0,16)}…\` → \`${an.bHash.slice(0,16)}…\`\n\n${an.r.resumen}\n\n`;
+    (an.r.hallazgos||[]).forEach(h=>m+=`- *"${h.fragmento_B}"* (${h.tipo}, gravedad ${h.gravedad}): ${h.explicacion}\n`);if(an.r.eliminado)m+=`\nEliminado respecto a A: ${an.r.eliminado}\n`;m+='\n'});
+  m+=`## Declaración de uso de IA\n\n${$('#decl').value}\n\n## Nota metodológica\n\nLas fechas se asignan automáticamente al sellar cada versión y no pueden editarse; cada huella incluye la anterior, de modo que cualquier alteración posterior rompe la cadena. Los análisis de contenido nuevo son orientativos y se basan en un modelo de lenguaje; deben leerse junto con el historial de versiones del editor original.\n`;
+  return m;
+}
+function download(name,content,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+const slug=()=>(S.title||'manuscrito').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').slice(0,40);
+$('#dlMd').onclick=async()=>download(`dossier-${slug()}.md`,await buildMd(),'text/markdown');
+$('#dlHtml').onclick=async()=>{const md=await buildMd();
+  const body=esc(md).replace(/^### (.*)$/gm,'<h3>$1</h3>').replace(/^## (.*)$/gm,'<h2>$1</h2>').replace(/^# (.*)$/gm,'<h1>$1</h1>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`(.+?)`/g,'<code>$1</code>')
+    .replace(/((?:^\|.*\|$\n?)+)/gm,t=>{const rows=t.trim().split('\n').filter(r=>!/^\|[-| ]+\|$/.test(r));return '<table>'+rows.map((r,i)=>'<tr>'+r.slice(1,-1).split('|').map(c=>i?`<td>${c.trim()}</td>`:`<th>${c.trim()}</th>`).join('')+'</tr>').join('')+'</table>'})
+    .replace(/^- (.*)$/gm,'<li>$1</li>').replace(/\n\n/g,'<br><br>');
+  download(`dossier-${slug()}.html`,`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Dossier de procedencia</title><style>body{font-family:Georgia,serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6;color:#17233A}table{border-collapse:collapse;width:100%;font-size:.85rem;margin:10px 0}th,td{border:1px solid #C9D3DD;padding:5px;text-align:left}code{font-size:.8rem}h1,h2,h3{font-family:system-ui,sans-serif}</style></head><body>${body}<script>window.onload=()=>window.print()<\/script></body></html>`,'text/html')};
+$('#decl').oninput=()=>{S.decl=$('#decl').value;save()};
+
+/* ---------- project ---------- */
+['title','venue','policy'].forEach(k=>$('#'+k).oninput=()=>{S[k]=$('#'+k).value;save()});
+$('#key').oninput=()=>localStorage.setItem('ia_openai_key',$('#key').value.trim());
+$('#model').onchange=()=>localStorage.setItem('ia_openai_model',$('#model').value);
+$('#loadModels').onclick=loadModels;
+$('#exportJson').onclick=()=>download(`procedencia-${slug()}.json`,JSON.stringify({app:'ProcedencIA',version:1,...S},null,2),'application/json');
+$('#importJson').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(d.app!=='ProcedencIA')throw new Error('no es un proyecto de ProcedencIA');delete d.app;delete d.version;S={...S,...d};await save();renderAll();$('#verify').click();toast('Proyecto importado')}catch(err){toast('Importación fallida: '+err.message)}e.target.value=''};
+$('#reset').onclick=async()=>{if(!confirm('Se borrarán todos los puntos de control, el registro y los análisis de este navegador. Exporta antes el proyecto si quieres conservarlo.'))return;S={title:'',venue:'',policy:DEFAULT_POLICY,checkpoints:[],ailog:[],analyses:[],decl:''};await save();renderAll()};
+
+(async()=>{try{await DB.open();const s=await DB.get('state');if(s)S={...S,...s}}catch(e){toast('Sin almacenamiento local: los datos se perderán al cerrar')}
+  $('#key').value=localStorage.getItem('ia_openai_key')||'';fillModels(FALLBACK_MODELS);renderAll()})();
+</script>
+</body>
+</html>
